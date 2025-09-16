@@ -1,0 +1,61 @@
+
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <style>
+  body {
+    background-color: #000;   
+    color: #00f320;              
+    font-size: 40px;          
+    font-family: Arial, sans-serif; 
+  }
+   ul li { font-size:22px; color:#ffeb99; margin-bottom:8px; }  /* hafif sarımsı, daha büyük */
+  .highlight { color:#41ff61c4; font-weight:bold; }
+  table {
+    border-collapse: collapse;
+    margin-top: 20px;
+  }
+  th, td {
+    border: 1px solid #fff;
+    padding: 10px;
+  }
+  button, input, select {
+    font-size: 18px;
+    padding: 8px 12px;
+    margin-top: 10px;
+  }
+   </style>
+  <meta charset="utf-8"><title>Sonuclar</title></head>
+<body>
+<h2>Analiz Sonuclari</h2>
+{% if analysis_results %}
+  <ul>
+  {% for item in analysis_results %}
+    <li>{{ item|safe }}</li>
+  {% endfor %}
+</ul>
+{% else %}
+  <p>Sonuç yok.</p>
+{% endif %}
+
+<h2>Ortalama Değerler Tablosu</h2>
+{% if tablo %}
+<table border="1" cellpadding="6">
+  <tr><th>Grup</th><th>Gün</th><th>Ortalama</th></tr>
+  {% for row in tablo %}
+    <tr><td>{{ row[0] }}</td><td>{{ row[1] }}</td><td>{{ "%.4f"|format(row[2]) }}</td></tr>
+  {% endfor %}
+</table>
+{% else %}
+<p>Tablo üretilemedi.</p>
+{% endif %}
+
+<h2>Grup-Zaman Grafiği</h2>
+{% if plot_url %}
+  <img src="data:image/png;base64,{{ plot_url }}" alt="grafik">
+{% else %}
+  <p>Grafik üretilemedi.</p>
+{% endif %}
+
+<p><a href="{{ url_for('index') }}">Başa dön</a></p>
+</body></html>

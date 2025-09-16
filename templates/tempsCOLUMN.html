@@ -1,0 +1,47 @@
+
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <style>
+  body {
+    background-color: #000;   
+    color: #fff;              
+    font-size: 40px;        
+    font-family: Arial, sans-serif; 
+  }
+  table {
+    border-collapse: collapse;
+    margin-top: 20px;
+  }
+  th, td {
+    border: 1px solid #fff;
+    padding: 10px;
+  }
+  button, input, select {
+    font-size: 18px;
+    padding: 8px 12px;
+    margin-top: 10px;
+  }
+  </style>
+  <meta charset="utf-8"><title>Sütun Seçimi</title></head>
+<body>
+<h2>Sütun Seçimi (secim={{ secim }})</h2>
+<form method="POST">
+{% if secim in ['1','2'] %}
+  <p>İlk sütun:</p>
+  <select name="col1">
+    {% for col in cols %}<option value="{{ loop.index0 }}">{{ col }}</option>{% endfor %}
+  </select>
+  <p>İkinci sütun:</p>
+  <select name="col2">
+    {% for col in cols %}<option value="{{ loop.index0 }}">{{ col }}</option>{% endfor %}
+  </select>
+{% else %}
+  <p>Tek sütun seç:</p>
+  <select name="col">
+    {% for col in cols %}<option value="{{ loop.index0 }}">{{ col }}</option>{% endfor %}
+  </select>
+{% endif %}
+  <p><button type="submit">Devam</button></p>
+</form>
+</body></html>

@@ -1,0 +1,34 @@
+
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <style>
+  body {
+    background-color: #000;   
+    color: #fff;              
+    font-size: 40px;          
+    font-family: Arial, sans-serif; 
+  }
+  table {
+    border-collapse: collapse;
+    margin-top: 20px;
+  }
+  th, td {
+    border: 1px solid #fff;
+    padding: 10px;
+  }
+  button, input, select {
+    font-size: 18px;
+    padding: 8px 12px;
+    margin-top: 10px;
+  }
+  </style>
+  <meta charset="utf-8"><title>Gun Seciniz</title></head>
+<body>
+<h2>Gün sayisini girin</h2>
+<p>Seçili sütunlar: {{ col1 }}{% if col2 %} ve {{ col2 }}{% endif %}</p>
+<form method="POST">
+  <input type="number" name="gun" value="7" min="1" required>
+  <button type="submit">Analizi Calistir</button>
+</form>
+</body></html>

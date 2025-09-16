@@ -1,0 +1,35 @@
+
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <style>
+  body {
+    background-color: #000;  
+    color: #fff;            
+    font-size: 40px;          
+    font-family: Arial, sans-serif; 
+  }
+  table {
+    border-collapse: collapse;
+    margin-top: 20px;
+  }
+  th, td {
+    border: 1px solid #fff;
+    padding: 10px;
+  }
+  button, input, select {
+    font-size: 18px;
+    padding: 8px 12px;
+    margin-top: 10px;
+  }
+  </style>
+  <meta charset="utf-8"><title>Grup Seçimi</title></head>
+<body>
+<h2>Hangi grupla çalışmak istiyorsunuz?</h2>
+{% if load_err %}<div style="color:#b00">{{ load_err }}</div>{% endif %}
+<form method="POST">
+  <button type="submit" name="secim" value="1">Grup 1 (tek grup, iki sütun kiyas)</button>
+  <button type="submit" name="secim" value="2">Grup 2 (tek grup, iki sütun kiyas)</button>
+  <button type="submit" name="secim" value="3">Grup 1 ve Grup 2 (tek sütun, bagimsiz kiyas)</button>
+</form>
+</body></html>

@@ -1,0 +1,209 @@
+
+from flask import Flask, render_template, request, redirect, url_for, flash
+import pandas as pd
+from scipy import stats
+from math import sqrt
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import io, base64, os
+
+app = Flask(__name__)
+app.secret_key = "dev"
+
+# ---- CONFIG ----
+CSV_PATH = r"c:\Users\ilker\OneDrive\Masaüstü\webSites\tez\1509.csv"
+CSV_SEP = ";"
+CSV_DECIMAL = ","
+
+# ---- DATA LOADING ----
+def h(x):
+    return f"<span class='highlight'>{x}</span>"
+def load_data():
+    if not os.path.exists(CSV_PATH):
+        return None, f"CSV bulunamadı: {CSV_PATH} (env: CSV_PATH ile ayarlayabilirsin)"
+    try:
+        df = pd.read_csv(CSV_PATH, sep=CSV_SEP, decimal=CSV_DECIMAL, skipinitialspace=True)
+    except Exception as e:
+        return None, f"CSV okunamadı: {e!r}"
+    for col in df.columns:
+        if col not in ['isim','SiraNo','grup']:
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+    if 'grup' not in df.columns:
+        return None, "'grup' sütunu yok. (1/2)"
+    return df, None
+
+DF, LOAD_ERR = load_data()
+
+def split_groups(df):
+    return df[df['grup']==1].copy(), df[df['grup']==2].copy()
+
+def get_cols(df):
+    return [c for c in df.columns if c not in ['isim','SiraNo','grup']]
+
+# ---- PLOTTING ----
+def ciz_grup_zaman(grup1, grup2, col1, col2, gun):
+    plt.figure(figsize=(6,4))
+    zaman=[0,gun]; tablo=[]; yorumlar=[]
+    if grup1 is not None and not grup1.empty:
+        ort1=[grup1[col1].mean(), grup1[col2].mean() if col2 in grup1 else grup1[col1].mean()]
+        plt.plot(zaman, ort1, marker='o', label="Grup 1")
+        tablo.append(["Grup 1",0,ort1[0]]); tablo.append(["Grup 1",gun,ort1[1]])
+        yorumlar.append("Grup 1: " + ("Artış" if ort1[1]>ort1[0] else "Azalış" if ort1[1]<ort1[0] else "Değişim yok"))
+    if grup2 is not None and not grup2.empty:
+        ort2=[grup2[col1].mean(), grup2[col2].mean() if col2 in grup2 else grup2[col1].mean()]
+        plt.plot(zaman, ort2, marker='o', label="Grup 2")
+        tablo.append(["Grup 2",0,ort2[0]]); tablo.append(["Grup 2",gun,ort2[1]])
+        yorumlar.append("Grup 2: " + ("Artış" if ort2[1]>ort2[0] else "Azalış" if ort2[1]<ort2[0] else "Değişim yok"))
+    plt.title(f"Grup-Zaman ({col1} vs {col2})")
+    plt.xlabel("Gün"); plt.ylabel("Ortalama")
+    plt.legend(); plt.grid(True, linestyle="--", alpha=0.5)
+    buf=io.BytesIO(); plt.savefig(buf, format="png", bbox_inches="tight"); plt.close(); buf.seek(0)
+    return base64.b64encode(buf.getvalue()).decode('utf-8'), yorumlar, tablo
+
+# ---- ROUTES ----
+@app.route("/", methods=["GET","POST"])
+def index():
+    if LOAD_ERR:
+        flash(LOAD_ERR, "error")
+        return render_template("index.html", load_err=LOAD_ERR)
+    if request.method=="POST":
+        secim=request.form.get("secim")  # "1","2","3"
+        return redirect(url_for("select_column", secim=secim))
+    return render_template("index.html", load_err=None)
+
+@app.route("/select_column/<secim>", methods=["GET","POST"])
+def select_column(secim):
+    if LOAD_ERR: 
+        flash(LOAD_ERR, "error")
+        return redirect(url_for("index"))
+    cols=get_cols(DF)
+    if request.method=="POST":
+        if secim in ['1','2']:
+            col1=int(request.form['col1']); col2=int(request.form['col2'])
+            return redirect(url_for("input_gun", secim=secim, col1=col1, col2=col2))
+        else:
+            col=int(request.form['col'])
+            return redirect(url_for("input_gun", secim=secim, col1=col, col2=col))
+    return render_template("tempsCOLUMN.html", cols=cols, secim=secim)
+
+@app.route("/input_gun/<secim>/<col1>/<col2>", methods=["GET","POST"])
+def input_gun(secim,col1,col2):
+    cols=get_cols(DF)
+    col1=int(col1); col2=int(col2)
+    if request.method=="POST":
+        try:
+            gun=int(request.form['gun'])
+        except:
+            gun=7
+        return redirect(url_for("run_analysis", secim=secim, col1=col1, col2=col2, gun=gun))
+    return render_template("tempsGUN.html", col1=cols[col1], col2=cols[col2])
+
+@app.route("/run_analysis/<secim>/<col1>/<col2>/<gun>", methods=["GET"])
+def run_analysis(secim,col1,col2,gun):
+    cols=get_cols(DF); col1=int(col1); col2=int(col2); gun=int(gun)
+    istem1, istem2 = cols[col1], cols[col2]
+    g1,g2=split_groups(DF)
+    analysis=[]; plot_url=None; yor=[]; tablo=None
+
+    # Tek grup -> iki sütun seçilir, paired analiz
+    if secim in ['1','2']:
+        g=g1 if secim=='1' else g2
+        d1=g[istem1].dropna(); d2=g[istem2].dropna()
+        analysis.append(f"{'Grup 1' if secim=='1' else 'Grup 2'} içi: {istem1} vs {istem2}")
+        if len(d1)>2 and len(d2)>2:
+            s1,p1=stats.shapiro(d1); s2,p2=stats.shapiro(d2)
+            analysis.append(f"{istem1} Shapiro: stat={s1:.4f}, p={p1:.4f}")
+            analysis.append(f"{istem2} Shapiro: stat={s2:.4f}, p={p2:.4f}")
+            if p1>0.05 and p2>0.05:
+                t,p=stats.ttest_rel(d1,d2)
+                analysis.append(f"Paired t-test: t={t:.4f}, p={p:.4f}")
+                diff=(d1-d2)
+                if diff.std(ddof=1)>0:
+                    d_val=abs(diff.mean()/diff.std(ddof=1))
+                else:
+                    d_val=float('nan')
+                analysis.append(f"Cohen's d: {d_val:.4f}  (0.2 küçük / 0.5 orta / 0.8 büyük)")
+            else:
+                try:
+                    w,p=stats.wilcoxon(d1,d2)
+                    analysis.append(f"Wilcoxon: W={w:.4f}, p={p:.4f}")
+                except Exception as e:
+                    analysis.append(f"Wilcoxon hata: {e}")
+        else:
+            analysis.append("Uyari: örneklem çok kucuk.")
+        plot_url,yor,tablo=ciz_grup_zaman(g if secim=='1' else None, None if secim=='1' else g, istem1, istem2, gun)
+          # ---------- EXTRA: Group × Time interaction ----------
+        # Eğer diğer grupta da aynı iki sütun varsa, değişim skorlarını karşılaştıralım
+        other = g2 if secim=='1' else g1
+        if not other.empty and (istem1 in other.columns) and (istem2 in other.columns):
+            c1 = g[[istem1, istem2]].dropna()
+            c2 = other[[istem1, istem2]].dropna()
+            if len(c1)>=3 and len(c2)>=3:
+                ch1 = (c1[istem2] - c1[istem1])   # seçilen grupta değişim
+                ch2 = (c2[istem2] - c2[istem1])   # diğer grupta değişim
+
+                # Normallik kabaca kontrol edilebilir; burada direkt Welch t-test kullanıyoruz
+                t_int, p_int = stats.ttest_ind(ch1, ch2, equal_var=False)
+                analysis.append("--- Group × Time interaction ---")
+                analysis.append(f"Change scores: "
+                                f"Seçilen grup mean={ch1.mean():.2f}±{ch1.std(ddof=1):.2f}, "
+                                f"Diğer grup mean={ch2.mean():.2f}±{ch2.std(ddof=1):.2f}")
+                analysis.append(f"Interaction (Welch) t-test: "
+                                f"t={h(f'{t_int:.4f}')}, p={h(f'{p_int:.4f}')}")
+
+                # Değişim skorları için Cohen's d (bağımsız)
+                n1, n2 = len(ch1), len(ch2)
+                sd1, sd2 = ch1.std(ddof=1), ch2.std(ddof=1)
+                sp2 = ((n1-1)*sd1**2 + (n2-1)*sd2**2) / (n1+n2-2) if (n1+n2-2)>0 else float('nan')
+                sp  = sp2**0.5 if sp2==sp2 else float('nan')
+                d_int = (ch1.mean()-ch2.mean())/sp if (sp and sp>0) else float('nan')
+                analysis.append(f"Interaction Cohen's d: {h(f'{d_int:.4f}')} "
+                                "(0.2 küçük / 0.5 orta / 0.8 büyük)")
+
+                if p_int < 0.05:
+                    analysis.append("Yorum: Group × Time interaction ANLAMLI (gruplar farklı şekilde değişmiş).")
+                else:
+                    analysis.append("Yorum: Group × Time interaction ANLAMLI DEĞİL (gruplar benzer değişmiş).")
+
+    # İki grup -> tek sütun, bağımsız analiz
+    elif secim=='3':
+        d1=g1[istem1].dropna(); d2=g2[istem1].dropna()
+        n1,n2=len(d1),len(d2)
+        analysis.append(f"Grup 1 vs Grup 2: {istem1}")
+        if n1>2 and n2>2:
+            s1,p1=stats.shapiro(d1); s2,p2=stats.shapiro(d2)
+            analysis.append(f"Grup1 Shapiro: stat={s1:.4f}, p={p1:.4f}")
+            analysis.append(f"Grup2 Shapiro: stat={s2:.4f}, p={p2:.4f}")
+            if p1>0.05 and p2>0.05:
+                lev,pl=stats.levene(d1,d2)
+                analysis.append(f"Levene: stat={lev:.4f}, p={pl:.4f}")
+                t,p=stats.ttest_ind(d1,d2,equal_var=(pl>0.05))
+                analysis.append(f"{'Student' if pl>0.05 else 'Welch'} t-test: t={t:.4f}, p={p:.4f}")
+                sd1=d1.std(ddof=1); sd2=d2.std(ddof=1)
+                sp = sqrt(((n1-1)*sd1**2 + (n2-1)*sd2**2) / (n1+n2-2)) if (n1+n2-2)>0 else float('nan')
+                d_val=(d1.mean()-d2.mean())/sp if sp and sp>0 else float('nan')
+                analysis.append(f"Cohen's d: {d_val:.4f}  (0.2 küçük / 0.5 orta / 0.8 büyük)")
+            else:
+                U,p=stats.mannwhitneyu(d1,d2,alternative='two-sided')
+                analysis.append(f"Mann-Whitney U: U={U:.4f}, p={p:.4f}")
+                N=n1+n2
+                from scipy.stats import norm
+                Z=norm.ppf(1-p/2) if p>0 else float('inf')
+                r=Z/sqrt(N) if N>0 else float('nan')
+                analysis.append(f"Etki büyüklüğü r={r:.4f}  (0.1 küçük / 0.3 orta / 0.5 büyük)")
+        else:
+            analysis.append("Uyarı: örneklem çok küçük.")
+        plot_url,yor,tablo=ciz_grup_zaman(g1,g2,istem1,istem1,gun)
+
+    else:
+        analysis.append("Geçersiz seçim.")
+
+    return render_template("sonuclar.html",
+                           analysis_results=analysis,
+                           plot_url=plot_url,
+                           yorumlar=yor,
+                           tablo=tablo)
+
+if __name__ == "__main__":
+    app.run(debug=True, host="0.0.0.0", port=5000)
